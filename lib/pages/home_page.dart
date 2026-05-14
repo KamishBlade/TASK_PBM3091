@@ -1,202 +1,148 @@
 import 'package:flutter/material.dart';
-
-import '../models/product_model.dart';
 import '../services/api_service.dart';
-import '../services/storage_service.dart';
-import '../widgets/product_card.dart';
-
-import 'add_product_page.dart';
-import 'login_page.dart';
-import 'submit_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String token;
+
+  const HomePage({super.key, required this.token});
 
   @override
-  State<HomePage> createState() =>
-      _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState
-    extends State<HomePage> {
-  List<ProductModel> products = [];
+class _HomePageState extends State<HomePage> {
+  List products = [];
+  bool loading = true;
 
-  bool isLoading = true;
-
-  Future<void> fetchProducts() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    try {
-      products =
-          await ApiService.getProducts();
-    } catch (e) {
-      print(e);
-    }
-
-    setState(() {
-      isLoading = false;
-    });
-  }
+  final nameC = TextEditingController();
+  final priceC = TextEditingController();
+  final descC = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    fetchProducts();
+    loadData();
+  }
+
+  void loadData() async {
+    final data = await ApiService.getProducts(widget.token);
+    setState(() {
+      products = data;
+      loading = false;
+    });
+  }
+
+  void addProduct() async {
+    final price = int.tryParse(priceC.text);
+    if (price == null) return;
+
+    final success = await ApiService.createProduct(
+      widget.token,
+      nameC.text,
+      price,
+      descC.text,
+    );
+
+    if (success) {
+      nameC.clear();
+      priceC.clear();
+      descC.clear();
+      loadData();
+    }
+  }
+
+  void deleteProduct(int id) async {
+    final success = await ApiService.deleteProduct(widget.token, id);
+
+    if (success) {
+      loadData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Produk dihapus")),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xff0D0D0D),
-
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor:
-            Colors.transparent,
-
-        centerTitle: true,
-
-        title: const Text(
-          'LEGION STORE',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight:
-                FontWeight.bold,
-            letterSpacing: 1,
-          ),
-        ),
-
-        actions: [
-          IconButton(
-            onPressed: () async {
-              await StorageService.logout();
-
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const LoginPage(),
+      appBar: AppBar(title: const Text("Katalog Produk")),
+      body: Column(
+        children: [
+          // FORM
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              children: [
+                TextField(
+                  controller: nameC,
+                  decoration: const InputDecoration(labelText: "Nama Produk"),
                 ),
-              );
-            },
-            icon: const Icon(
-              Icons.logout,
-              color: Colors.redAccent,
-            ),
-          )
-        ],
-      ),
-
-      body: isLoading
-          ? const Center(
-              child:
-                  CircularProgressIndicator(
-                color: Colors.redAccent,
-              ),
-            )
-          : products.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Belum ada produk',
-                    style: TextStyle(
-                      color:
-                          Colors.white,
-                      fontSize: 18,
-                    ),
+                TextField(
+                  controller: priceC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: "Harga"),
+                ),
+                TextField(
+                  controller: descC,
+                  decoration: const InputDecoration(labelText: "Deskripsi"),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: addProduct,
+                    child: const Text("Simpan Draft"),
                   ),
-                )
-              : RefreshIndicator(
-                  color:
-                      Colors.redAccent,
-                  onRefresh:
-                      fetchProducts,
+                ),
+              ],
+            ),
+          ),
 
-                  child: ListView.builder(
-                    padding:
-                        const EdgeInsets.all(
-                      15,
+          const Divider(),
+
+          // GRID
+          Expanded(
+            child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : GridView.builder(
+                    padding: const EdgeInsets.all(10),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
                     ),
+                    itemCount: products.length,
+                    itemBuilder: (context, i) {
+                      final item = products[i];
 
-                    itemCount:
-                        products.length,
-
-                    itemBuilder:
-                        (context, index) {
-                      return Padding(
-                        padding:
-                            const EdgeInsets.only(
-                          bottom: 15,
-                        ),
-
-                        child: ProductCard(
-                          product:
-                              products[index],
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            children: [
+                              Text(item["name"] ?? "-",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                              Text("Rp ${item["price"] ?? 0}"),
+                              Expanded(
+                                child: Text(item["description"] ?? "-"),
+                              ),
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => deleteProduct(item["id"]),
+                              )
+                            ],
+                          ),
                         ),
                       );
                     },
                   ),
-                ),
-
-      floatingActionButton: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.end,
-
-        children: [
-          FloatingActionButton(
-            heroTag: 'add',
-
-            backgroundColor:
-                Colors.redAccent,
-
-            child: const Icon(
-              Icons.add,
-              color: Colors.white,
-            ),
-
-            onPressed: () async {
-              final result =
-                  await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const AddProductPage(),
-                ),
-              );
-
-              if (result == true) {
-                fetchProducts();
-              }
-            },
-          ),
-
-          const SizedBox(height: 15),
-
-          FloatingActionButton(
-            heroTag: 'submit',
-
-            backgroundColor:
-                Colors.green,
-
-            child: const Icon(
-              Icons.send,
-              color: Colors.white,
-            ),
-
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const SubmitPage(),
-                ),
-              );
-            },
           ),
         ],
       ),
     );
   }
-}
+}  

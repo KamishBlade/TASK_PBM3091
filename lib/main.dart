@@ -10,13 +10,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PBM 2026',
-      theme: ThemeData(
-        primarySwatch: Colors.deepPurple,
-      ),
-      home: const LoginPage(),
+      home: LoginPage(),
     );
   }
 }
